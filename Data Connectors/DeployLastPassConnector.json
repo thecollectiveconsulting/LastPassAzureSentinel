@@ -1,0 +1,441 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "serviceplanName": {
+            "defaultValue": "WestEuropePlan",
+            "metadata": {
+                "description": "Name of the App Service Plan which will be deployed"
+            },
+            "type": "string"
+        },
+        "keyVaultName": {
+            "defaultValue": "kv-LastPass",
+            "metadata": {
+                "description": "Name of the Key VAult which will be deployed"
+            },
+            "type": "string"
+        },
+        "storageName": {
+            "defaultValue": "storagelastpass",
+            "metadata": {
+                "description": "Name of the Storage Account which will be deployed"
+            },
+            "type": "String"
+        },
+        "appConfigName": {
+            "defaultValue": "ac-lastpass",
+            "metadata": {
+                "description": "Name of the app configuration which will be deployed"
+            },
+            "type": "String"
+        },
+        "connectorName": {
+            "defaultValue": "LastpassConnector",
+            "metadata": {
+                "description": "Name of the Azure Function"
+            },
+            "type": "string"
+        },
+        "WkSpaceId": {
+            "defaultValue": "<>",
+            "metadata": {
+                "description": "Workspace ID for Azure Sentinel"
+            },
+            "type": "string"
+        },
+        "SharedKey": {
+            "defaultValue": "<>",
+            "metadata": {
+                "description": "Workspace Key for Azure Sentinel"
+            },
+            "type": "string"
+        },
+        "ProvHash": {
+            "defaultValue": "<>",
+            "metadata": {
+                "description": "LastPass API key - https://support.logmeininc.com/lastpass/help/where-can-i-find-the-cid-and-api-secret"
+            },
+            "type": "string"
+        },
+        "Cid": {
+            "defaultValue": "<>",
+            "metadata": {
+                "description": "LastPass Customer ID - https://support.logmeininc.com/lastpass/help/where-can-i-find-the-cid-and-api-secret"
+            },
+            "type": "string"
+        }
+    },
+    "functions": [],
+    "variables": {
+        "keyValueNames": {
+            "type": "array",
+            "defaultValue": [ "FirstRun", "LastRunEndTime", "LogType", "SentinelApiVersion"]
+        },
+        "keyValueValues": {
+            "type": "array",
+            "defaultValue": [ "1", "2021-08-25 09:45:00", "LastPass_Data", "2016-04-01"]
+        },
+        "CidUrl": {
+            "uri" : "[concat('https://', toLower(parameters('keyVaultName')), '.vault.azure.net/secret/Cid')]"
+        },
+        "ProvHashUrl": {
+            "uri" : "[concat('https://', toLower(parameters('keyVaultName')), '.vault.azure.net/secret/ProvHash')]"
+        },
+        "SharedKeyUrl": {
+            "uri" : "[concat('https://', toLower(parameters('keyVaultName')), '.vault.azure.net/secret/SharedKey')]"
+        },
+        "packageURL": "https://github.com/OLVA1993/LastPass/blob/master/publish.zip?raw=true"
+    },
+    "resources": [
+        {
+            "name": "[parameters('connectorName')]",
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2020-12-01",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "kind": "functionapp",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', parameters('serviceplanName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]"
+            ],
+            "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('serviceplanName'))]",
+                "siteConfig": {
+                    "appSettings": [
+                        {
+                            "name": "AzureWebJobsDashboard",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageName')),'2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageName')),'2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name":"WEBSITE_RUN_FROM_PACKAGE",
+                            "value": "[variables('packageURL')]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageName')),'2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTSHARE",
+                            "value": "[toLower(parameters('connectorName'))]"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~3"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "dotnet"
+                        },
+                        {
+                            "name": "VaultUri",
+                            "value": "[concat('https://', parameters('keyVaultName'), '.vault.azure.net/')]"
+                        },
+                        {
+                            "name": "AppConfigurationUri",
+                            // TODO
+                            "value": ""
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.AppConfiguration/configurationStores",
+            "apiVersion": "2020-06-01",
+            "name": "[parameters('appConfigName')]",
+            "location": "westeurope",
+            "sku": {
+                "name": "standard"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "resources": [
+                //::[ "FirstRun", "LastRunEndTime", "LogType", "SentinelApiVersion"]
+                //"defaultValue": [ "1", "2021-08-25 09:45:00", "LastPass_Data", "2016-04-01"]
+                 {
+                    "type": "keyValues",
+                    "apiVersion": "2020-07-01-preview",
+                    "name": "FirstRun$LastPassConnector",
+                    "dependsOn": [
+                        "[parameters('appConfigName')]"
+                    ],
+                    "properties": {
+                        "value": "1"
+                    }
+                },
+                {
+                    "type": "keyValues",
+                    "apiVersion": "2020-07-01-preview",
+                    "name": "LastRunEndTime$LastPassConnector",
+                    "dependsOn": [
+                        "[parameters('appConfigName')]"
+                    ],
+                    "properties": {
+                        "value": "2021-08-25 09:45:00"
+                    }
+                },
+                {
+                    "type": "keyValues",
+                    "apiVersion": "2020-07-01-preview",
+                    "name": "LogType$LastPassConnector",
+                    "dependsOn": [
+                        "[parameters('appConfigName')]"
+                    ],
+                    "properties": {
+                        "value": "LastPass_Data"
+                    }
+                },
+                {
+                    "type": "keyValues",
+                    "apiVersion": "2020-07-01-preview",
+                    "name": "SentinelApiVersion$LastPassConnector",
+                    "dependsOn": [
+                        "[parameters('appConfigName')]"
+                    ],
+                    "properties": {
+                        "value": "2016-04-01"
+                    }
+                },
+                {
+                    "type": "keyValues",
+                    "apiVersion": "2020-07-01-preview",
+                    "name": "WkSpaceId$LastPassConnector",
+                    "dependsOn": [
+                        "[parameters('appConfigName')]"
+                    ],
+                    "properties": {
+                        "value": "[string(parameters('WkSpaceId'))]"
+                    }
+                },
+                {
+                    "type": "keyValues",
+                    "apiVersion": "2020-07-01-preview",
+                    "name": "Cid$LastPassConnector",
+                    "dependsOn": [
+                        "[parameters('appConfigName')]"
+                    ],
+                    "properties": {
+                        "value": "[string(variables('CidUrl'))]",
+                        "contentType": "application/vnd.microsoft.appconfig.keyvaultref+json;charset=utf-8"
+                    }
+                },
+                {
+                    "type": "keyValues",
+                    "apiVersion": "2020-07-01-preview",
+                    "name": "Provhash$LastPassConnector",
+                    "dependsOn": [
+                        "[parameters('appConfigName')]"
+                    ],
+                    "properties": {
+                        "value": "[string(variables('ProvHashUrl'))]",
+                        "contentType": "application/vnd.microsoft.appconfig.keyvaultref+json;charset=utf-8"
+                    }
+                },
+                {
+                    "type": "keyValues",
+                    "apiVersion": "2020-07-01-preview",
+                    "name": "SharedKey$LastPassConnector",
+                    "dependsOn": [
+                        "[parameters('appConfigName')]"
+                    ],
+                    "properties": {
+                        "value": "[string(variables('SharedKeyUrl'))]",
+                        "contentType": "application/vnd.microsoft.appconfig.keyvaultref+json;charset=utf-8"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "[parameters('serviceplanName')]",
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2020-12-01",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Y1",
+                "tier": "Dynamic",
+                "size": "Y1",
+                "family": "Y",
+                "capacity": 0
+            }
+        },
+        {
+            "name": "[parameters('keyVaultName')]",
+            "type": "Microsoft.KeyVault/vaults",
+            "apiVersion": "2019-09-01",
+            "location": "[resourceGroup().location]",            
+            "properties": {
+                "enabledForDeployment": true,
+                "enabledForTemplateDeployment": true,
+                "enabledForDiskEncryption": true,
+                "tenantId": "[subscription().tenantId]",
+                "accessPolicies": [
+                ],
+                "sku": {
+                    "name": "standard",
+                    "family": "A"
+                },
+                "vaultUri": "[concat('https://', parameters('keyVaultName'), '.vault.azure.net/')]"
+
+            },
+            "resources": [
+                {
+                    "name": "Cid",
+                    "type": "secrets",
+                    "apiVersion": "2019-09-01",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+                    ],
+                    "properties": {
+                        "value": "[parameters('Cid')]"
+                    }
+                },
+                {
+                    "name": "ProvHash",
+                    "type": "secrets",
+                    "apiVersion": "2019-09-01",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+                    ],
+                    "properties": {
+                        "value": "[parameters('ProvHash')]"
+                    }
+                },
+                {
+                    "name": "SharedKey",
+                    "type": "secrets",
+                    "apiVersion": "2019-09-01",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+                    ],
+                    "properties": {
+                        "value": "[parameters('SharedKey')]"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "[parameters('storageName')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2021-04-01",
+            "location": "[resourceGroup().location]",
+            "kind": "Storage",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "resources": [
+                {
+                    "type": "Microsoft.Storage/storageAccounts/blobServices",
+                    "apiVersion": "2021-04-01",
+                    "name": "[concat(parameters('storageName'), '/default')]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]"
+                    ],
+                    "sku": {
+                        "name": "Standard_LRS",
+                        "tier": "Standard"
+                    },
+                    "properties": {
+                        "cors": {
+                            "corsRules": []
+                        },
+                        "deleteRetentionPolicy": {
+                            "enabled": false
+                        }
+                    }
+                },
+                {
+                    "name": "[concat(parameters('storageName'), '/default')]",
+                    "type": "Microsoft.Storage/storageAccounts/fileServices",
+                    "apiVersion": "2021-04-01",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]"
+                    ],
+                    "location": "[resourceGroup().location]",
+                    "kind": "StorageV2",
+                    "sku": {
+                        "name": "Standard_LRS",
+                        "tier": "Standard"
+                    }
+                },
+                {
+                    "type": "Microsoft.Storage/storageAccounts/tableServices",
+                    "apiVersion": "2021-04-01",
+                    "name": "[concat(parameters('storageName'), '/default')]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]"
+                    ],
+                    "properties": {
+                        "cors": {
+                            "corsRules": []
+                        }
+                    }
+                },
+                {
+                    "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+                    "apiVersion": "2021-04-01",
+                    "name": "[concat(parameters('storageName'), '/default/azure-webjobs-hosts')]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageName'), 'default')]",
+                        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]"
+                    ],
+                    "properties": {
+                        "defaultEncryptionScope": "$account-encryption-key",
+                        "denyEncryptionScopeOverride": false,
+                        "publicAccess": "None"
+                    }
+                },
+                {
+                    "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+                    "apiVersion": "2021-04-01",
+                    "name": "[concat(parameters('storageName'), '/default/azure-webjobs-secrets')]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storageName'), 'default')]",
+                        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]"
+                    ],
+                    "properties": {
+                        "defaultEncryptionScope": "$account-encryption-key",
+                        "denyEncryptionScopeOverride": false,
+                        "publicAccess": "None"
+                    }
+                },
+                {
+                    "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+                    "apiVersion": "2021-04-01",
+                    "name": "[concat(parameters('storageName'), '/default/', parameters('storageName'))]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Storage/storageAccounts/fileServices', parameters('storageName'), 'default')]",
+                        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]"
+                    ]
+                },
+                {
+                    "type": "Microsoft.Storage/storageAccounts/tableServices/tables",
+                    "apiVersion": "2021-04-01",
+                    "name": "[concat(parameters('storageName'), '/default/AzureWebJobsHostLogs202109')]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Storage/storageAccounts/tableServices', parameters('storageName'), 'default')]",
+                        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]"
+                    ]
+                },
+                {
+                    "type": "Microsoft.Storage/storageAccounts/tableServices/tables",
+                    "apiVersion": "2021-04-01",
+                    "name": "[concat(parameters('storageName'), '/default/AzureWebJobsHostLogscommon')]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Storage/storageAccounts/tableServices', parameters('storageName'), 'default')]",
+                        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageName'))]"
+                    ]
+                }
+            ]
+        }
+    ],
+    "outputs": {}
+}
