@@ -139,7 +139,6 @@
                         },
                         {
                             "name": "AppConfigurationUri",
-                            // TODO
                             "value": ""
                         }
                     ]
