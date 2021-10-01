@@ -19,7 +19,56 @@ An ARM template is provided to easily deploy all of the components for the data 
 - An App Configuration which contains the configuration variables.
 - An App Services which contains one C# Azure Functions which pulls data from the LastPass API.
 
+### Deploy to your Azure subscription
 
+1. Click on the "Deploy to Azure" button below. When prompted, log in to your Azure subscription. 
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fthecollectiveconsulting%2FLastPassAzureSentinel%2Fmain%2FData%2520Connectors%2FDeployLastPassConnector.json)
+
+2. Select a subscription and resource group, we recommend creating a new resource group.
+3. Fill in the required fields:
+
+  1. **Serviceplan Name**: the name of the serviceplan.
+  2. **Key Vault Name**: the name of the keyvault, where we will store the secrets.
+  3. **Storage Name**: The name of the bot.
+  4. **App Config Name**: The name of the app-configuration, where we will store the connector settings.
+  5. **Connector Name**: The name of the dataconnector.
+  6. **Shared Key**: The sharedKey from the LastPass API.
+  7. **Prov Hash**: The Provisioning Hash from the LastPass API.
+  8. **Cid**: The Provisioning Hash from the LastPass API.
+  9. **Wk Space Id**: The Log analytics workspace ID.
+
+4. when the deployment is done, we need to do some manual configurations.
+
+    1. **Add Access Policies**:
+
+        1. Go to the Created KeyVault.
+        2. Select **Access policies**, which can be found under the Settings blade.
+        3. Click **+ Add Access Policy**
+        4. Set Secret permissions:
+
+        1. Get
+        2. List
+        
+        5. Select principal: select the dataconnector.
+        6. report steps 3-5 and select the app configuration as principal.
+        7. Click Save
+
+    2. **Add App config access**
+
+        1. Go to the created app configuration
+        2. Select **Access keys**, which can be found under the Settings blade.
+        3. Click the **copy** button from the **connection string** value under the Primary key section.
+        4. Navigate to the dataconnector that was created.
+        5. Select **Configuration**, which can be found under the Settings blade.
+        6. Click on the Application Setting **AppConfigurationUri**
+        7. Paste the Access key inside the value input field.
+        8. Press OK followed by Save
+
+5. Restart the dataconnector
+
+> If All succeeded you should see a custom table **LastPass_Data_CL** inside of the Log Analytics Workspace.
+> Note: It can take a couple of minutes before the data is visible.
 
 ## Workbook
 The workbook contains visualizations about the activity within LastPass and provides an overview of the user activity.
