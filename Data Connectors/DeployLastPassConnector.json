@@ -85,7 +85,7 @@
         "SharedKeyUrl": {
             "uri" : "[concat('https://', toLower(parameters('keyVaultName')), '.vault.azure.net/secret/SharedKey')]"
         },
-        "packageURL": "https://github.com/OLVA1993/LastPass/blob/master/publish.zip?raw=true"
+        "packageURL": "https://github.com/thecollectiveconsulting/LastPassAzureSentinel/blob/main/Data%20Connectors/LastPassDataConnector.zip?raw=true"
     },
     "resources": [
         {
@@ -158,8 +158,6 @@
                 "type": "SystemAssigned"
             },
             "resources": [
-                //::[ "FirstRun", "LastRunEndTime", "LogType", "SentinelApiVersion"]
-                //"defaultValue": [ "1", "2021-08-25 09:45:00", "LastPass_Data", "2016-04-01"]
                  {
                     "type": "keyValues",
                     "apiVersion": "2020-07-01-preview",
